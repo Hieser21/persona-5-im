@@ -1,179 +1,166 @@
-import { useState } from 'react';
-import { StyleSheet, FlatList, TextInput, Pressable, KeyboardAvoidingView, Platform, Image, View } from 'react-native';
-import { useLocalSearchParams, router } from 'expo-router';
-import Animated, { FadeIn, SlideInRight } from 'react-native-reanimated';
-
-import { ThemedView } from '@/components/ThemedView';
-import { ThemedText } from '@/components/ThemedText';
-import { ChatBubble } from '@/components/ChatBubble';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, TextInput, Button, FlatList, Text, StyleSheet, Image } from 'react-native';
+import { Platform } from 'react-native';
+import io from 'socket.io-client';
+import * as ImagePicker from 'expo-image-picker';
+import * as FileSystem from 'expo-file-system';
 
 interface Message {
-  id: string;
-  text: string;
-  timestamp: string;
-  isSender: boolean;
-  senderName: string;
-  avatar?: any;
+    id: string;
+    text: string;
+    timestamp: string;
+    isSender: boolean;
+    senderName: string;
 }
 
-// Mock data
-const MOCK_MESSAGES: Message[] = [
-  {
-    id: '1',
-    text: "Hey, we need to talk about the next palace.",
-    timestamp: '14:30',
-    isSender: false,
-    senderName: "RYUJI",
-    avatar: require('@/assets/images/avatars/ryuji.png'),
-  },
-  {
-    id: '2',
-    text: "I've got some intel from Mishima about a potential target. Apparently, there's been some suspicious activity at Shujin lately.",
-    timestamp: '14:31',
-    isSender: true,
-    senderName: "JOKER",
-    avatar: require('@/assets/images/avatars/default.png'),
-  },
-  {
-    id: '3',
-    text: "For real!? What's going on at our school now?",
-    timestamp: '14:31',
-    isSender: false,
-    senderName: "RYUJI",
-    avatar: require('@/assets/images/avatars/ryuji.png'),
-  },
-  {
-    id: '4',
-    text: "Someone's been blackmailing students. They're using personal information to extort money. Mishima thinks they might have access to the school's records.",
-    timestamp: '14:32',
-    isSender: true,
-    senderName: "JOKER",
-    avatar: require('@/assets/images/avatars/default.png'),
-  },
-  {
-    id: '5',
-    text: "Damn, that's messed up! We gotta stop them!",
-    timestamp: '14:32',
-    isSender: false,
-    senderName: "RYUJI",
-    avatar: require('@/assets/images/avatars/ryuji.png'),
-  },
-  {
-    id: '6',
-    text: "Agreed. I'm thinking we should investigate this carefully. We need to find out who has access to these records and if they have a Palace. Ann and Makoto are already looking into some leads at school.",
-    timestamp: '14:33',
-    isSender: true,
-    senderName: "JOKER",
-    avatar: require('@/assets/images/avatars/default.png'),
-  },
-  {
-    id: '7',
-    text: "Should we meet up at the hideout to discuss this?",
-    timestamp: '14:33',
-    isSender: false,
-    senderName: "RYUJI",
-    avatar: require('@/assets/images/avatars/ryuji.png'),
-  },
-  {
-    id: '8',
-    text: "Yes. Let's meet at Leblanc after school tomorrow. I'll contact the others. We need to plan this carefully - we can't let them know we're onto them.",
-    timestamp: '14:34',
-    isSender: true,
-    senderName: "JOKER",
-    avatar: require('@/assets/images/avatars/default.png'),
-  }
-];
+const ChatScreen = () => {
+    const [message, setMessage] = useState('');
+    const [messages, setMessages] = useState<Message[]>([]);
+    const socket = io('http://localhost:3000'); // Adjust the URL as needed
 
-function processMessages(messages: Message[]) {
-  return messages.map((message, index) => {
-    const prevMessage = index > 0 ? messages[index - 1] : null;
-    const nextMessage = index < messages.length - 1 ? messages[index + 1] : null;
-    
-    return {
-      ...message,
-      isFirstInSequence: prevMessage?.isSender !== message.isSender,
-      isLastInSequence: nextMessage?.isSender !== message.isSender
+    useEffect(() => {
+        // Load previous messages from the server
+        socket.on('previousMessages', (previousMessages: Message[]) => {
+            setMessages(previousMessages);
+        });
+
+        // Listen for new messages
+        socket.on('newMessage', (newMessage: Message) => {
+            setMessages(prev => [...prev, newMessage]);
+        });
+
+        return () => {
+            socket.disconnect();
+        };
+    }, []);
+
+    const sendMessage = () => {
+        if (!message.trim()) return;
+
+        const newMessage: Message = {
+            id: Date.now().toString(),
+            text: message,
+            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+            isSender: true,
+            senderName: "JOKER",
+        };
+
+        // Emit the message to the server
+        socket.emit('sendMessage', newMessage);
+        setMessage('');
     };
-  });
-}
+    const fileInputRef = useRef(null);
 
-export default function ChatScreen() {
-  const { id } = useLocalSearchParams();
-  const [message, setMessage] = useState('');
-  const [messages, setMessages] = useState(MOCK_MESSAGES);
+    const handleFileChange = async (event) => {
+        const file = event.target.files[0];
+        if (file) {
+            const formData = new FormData();
+            formData.append('file', file);
 
-  const sendMessage = () => {
-    if (!message.trim()) return;
+            try {
+                const response = await fetch('http://localhost:3000/upload', {
+                    method: 'POST',
+                    body: formData,
+                });
+                const result = await response.json();
+                console.log('File uploaded successfully:', result.fileUrl);
+            } catch (error) {
+                console.error('Error uploading file:', error);
+            }
+        }
+    };
+    const uploadImage = async () => {
+        const result = await ImagePicker.launchImageLibraryAsync({
+            mediaTypes: ['images', 'videos'],
+            allowsEditing: true,
+            allowsMultipleSelection: true,
+            aspect: [4, 3],
+            quality: 1,
+        });
 
-    const newMessage: Message = {
-      id: Date.now().toString(),
-      text: message,
-      timestamp: new Date().toLocaleTimeString([], { 
-        hour: '2-digit', 
-        minute: '2-digit',
-        hour12: false 
-      }),
-      isSender: true,
-      senderName: "JOKER",
+        if (!result.canceled) {
+            const fileUri = result.assets[0].uri;
+            const fileName = fileUri.split('/').pop() || 'image.jpg'; // Get the file name
+            const fileData = await FileSystem.readAsStringAsync(fileUri, { encoding: FileSystem.EncodingType.Base64 });
+            const blob = new Blob([fileData], { type: "image/jpeg" });
+            const formData = new FormData();
+            formData.append('file', blob, fileName);
+
+            fetch('http://localhost:3000/upload', {
+                method: 'POST',
+                body: formData,
+            })
+            .then(response => response.json())
+            .then(result => {
+                const fileUrl = result.fileUrl;
+                const fileMessage: Message = {
+                    id: Date.now().toString(),
+                    text: `Image uploaded: ${fileName} - ${fileUrl}`,
+                    timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
+                    isSender: true,
+                    senderName: "JOKER",
+                };
+                socket.emit('sendMessage', fileMessage); // Emit the file message to the server
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+        }
     };
 
-    setMessages(prev => [...prev, newMessage]);
-    setMessage('');
-  };
-
-  const processedMessages = processMessages(messages);
-
-  return (
-    <View style={styles.container}>
-
-      
-      <ThemedView style={styles.header}>
-        <Pressable 
-          onPress={() => router.back()} 
-          style={styles.backButton}
-        >
-          <ThemedText style={styles.backText}>RETURN</ThemedText>
-        </Pressable>
-      </ThemedView>
-
-      <FlatList
-        data={processedMessages}
-        renderItem={({ item }) => (
-          <ChatBubble message={item} />
-        )}
-        keyExtractor={item => item.id}
-        contentContainerStyle={styles.chatContainer}
-      />
-
-      <ThemedView style={styles.inputContainer}>
-        <TextInput
-          value={message}
-          onChangeText={setMessage}
-          style={styles.input}
-          placeholder="Press ⨉ to send"
-          placeholderTextColor="rgba(255, 255, 255, 0.5)"
-          multiline
-        />
-        <Pressable 
-          onPress={sendMessage}
-          style={[
-            styles.sendButton,
-            !message.trim() && styles.sendButtonDisabled
-          ]}
-          disabled={!message.trim()}
-        >
-          <ThemedText style={styles.sendButtonText}>⨉</ThemedText>
-        </Pressable>
-      </ThemedView>
-    </View>
-  );
-}
+    return (
+        <View style={styles.container}>
+            <FlatList
+                data={messages}
+                renderItem={({ item }) => (
+                    <View style={{ flexDirection: item.isSender ? 'row-reverse' : 'row', alignItems: 'center', margin: 5 }}>
+                        {!item.isSender && <Image source={{ uri: 'avatar_url' }} style={{ width: 50, height: 50, borderRadius: 25, marginRight: 10 }} />}
+                        <View style={{ backgroundColor: item.isSender ? 'blue' : 'green', padding: 10, borderRadius: 10 }}>
+                            {!item.isSender && <Text style={{ color: 'white', fontWeight: 'bold' }}>{item.senderName}</Text>}
+                            <Text style={{ color: 'white' }}>{item.text}</Text>
+                        </View>
+                        {item.isSender && <Image source={{ uri: 'avatar_url' }} style={{ width: 50, height: 50, borderRadius: 25, marginLeft: 10 }} />}
+                    </View>
+                )}
+                keyExtractor={item => item.id}
+                contentContainerStyle={{ paddingBottom: 100 }}
+            />
+            <View style={styles.inputContainer}>
+                <TextInput
+                    style={styles.input}
+                    value={message}
+                    onChangeText={setMessage}
+                    placeholder="Type a message"
+                    placeholderTextColor="#fff"
+                />
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Button title="✉️" onPress={sendMessage} color="#fff" />
+                    {Platform.OS !== 'web' ? (
+                      <Button title="🖼️" onPress={uploadImage} color="#fff" />
+                    ) : (
+                      <View>
+            <input
+                type="file"
+                ref={fileInputRef}
+                onChange={handleFileChange}
+                style={{ display: 'none' }} // Hide the default input
+            />
+            <Button
+                title="Upload File"
+                onPress={() => fileInputRef.current.click()} // Trigger file input click
+            />
+        </View>
+                    )}
+                </View>
+            </View>
+        </View>
+    );
+};
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FF0000',
-    overflow: 'hidden',
+    backgroundColor: '#000000',
   },
   header: {
     padding: 16,
@@ -201,7 +188,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     padding: 16,
-    paddingBottom: Platform.OS === 'ios' ? 32 : 16,
+    paddingBottom: 16,
     backgroundColor: '#000000',
     borderTopWidth: 2,
     borderTopColor: '#FF0000',
@@ -231,15 +218,6 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: 'bold',
   },
-  globalDiagonalLine: {
-    position: 'absolute',
-    width: 2,
-    height: '200%',
-    backgroundColor: '#FFFFFF',
-    top: 0,
-    left: '50%',
-    transform: [{ rotate: '45deg' }],
-    transformOrigin: 'top left',
-    zIndex: 1,
-  },
 });
+
+export default ChatScreen;
