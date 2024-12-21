@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Image, StyleSheet, Pressable } from 'react-native';
+import { router } from 'expo-router';
 import Animated, { 
   useAnimatedStyle, 
   withSpring,
@@ -7,29 +8,33 @@ import Animated, {
   withRepeat,
   useSharedValue
 } from 'react-native-reanimated';
+import { Platform } from 'react-native';
 import * as Haptics from 'expo-haptics';
-
+import { socketClient } from '@/hooks/socketService';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
 import { TextInput } from 'react-native';
 import { ParticleBackground } from '@/components/ParticleBackground';
 
 interface FormErrors {
-  email?: string;
+  username?: string;
   password?: string;
 }
 
 export default function LoginScreen() {
-  const [email, setEmail] = useState('');
+  const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [errors, setErrors] = useState<FormErrors>({});
   const buttonScale = useSharedValue(1);
   const loadingRotation = useSharedValue(0);
-
+  useEffect(() => {
+    socketClient.connect();
+    return () => socketClient.disconnect();
+  }, []);
   const validateForm = () => {
     const newErrors: FormErrors = {};
-    if (!email) newErrors.email = 'Email is required';
+    if (!username) newErrors.username = 'Username is required';
     if (!password) newErrors.password = 'Password is required';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -39,18 +44,19 @@ export default function LoginScreen() {
     if (!validateForm()) return;
     
     setIsLoading(true);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+    if (Platform.OS !== 'web') Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
 
-    // Simulate API call
-    try {
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      // Handle successful login
-    } catch (error) {
-      setErrors({ email: 'Invalid credentials' });
-    } finally {
-      setIsLoading(false);
+    const [error, response] = await socketClient.loginWithPassword(username, password);
+    
+    if (error) {
+        setErrors({ username: error });
+    } else {
+      
+        router.replace('/(tabs)/chats');
     }
-  };
+    
+    setIsLoading(false);
+};
 
   const buttonAnimatedStyle = useAnimatedStyle(() => ({
     transform: [
@@ -95,16 +101,16 @@ export default function LoginScreen() {
         </ThemedText>
         
         <TextInput
-          placeholder="Email"
-          value={email}
+          placeholder="username"
+          value={username}
           onChangeText={(text) => {
-            setEmail(text);
-            setErrors({ ...errors, email: undefined });
+            setUsername(text);
+            setErrors({ ...errors, username: undefined });
           }}
-          style={[styles.input, errors.email && styles.inputError]}
+          style={[styles.input, errors.username && styles.inputError]}
           placeholderTextColor="rgba(255, 255, 255, 0.5)"
           autoCapitalize="none"
-          keyboardType="email-address"
+          keyboardType="username-address"
         />
 
         <TextInput

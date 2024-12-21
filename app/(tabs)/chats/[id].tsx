@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { View, TextInput, Button, FlatList, Text, StyleSheet, Image } from 'react-native';
 import { Platform } from 'react-native';
 import io from 'socket.io-client';
+import {socketClient} from '@/hooks/socketService';
+import { ChatBubble } from '@/components/ChatBubble';
 import * as ImagePicker from 'expo-image-picker';
 import * as FileSystem from 'expo-file-system';
 
@@ -15,40 +17,30 @@ interface Message {
 
 const ChatScreen = () => {
     const [message, setMessage] = useState('');
-    const [messages, setMessages] = useState<Message[]>([]);
-    const socket = io('http://localhost:3000'); // Adjust the URL as needed
+    const [messages, setMessages] = useState<any>([]);
+    const currentUser = socketClient.getCurrentUser();
 
     useEffect(() => {
-        // Load previous messages from the server
-        socket.on('previousMessages', (previousMessages: Message[]) => {
-            setMessages(previousMessages);
+        socketClient.connect();
+        
+        socketClient.on('message/receive', (message) => {
+            setMessages(prev => [...prev, message]);
         });
 
-        // Listen for new messages
-        socket.on('newMessage', (newMessage: Message) => {
-            setMessages(prev => [...prev, newMessage]);
-        });
-
-        return () => {
-            socket.disconnect();
-        };
+        return () => socketClient.disconnect();
     }, []);
 
-    const sendMessage = () => {
-        if (!message.trim()) return;
-
-        const newMessage: Message = {
-            id: Date.now().toString(),
-            text: message,
-            timestamp: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false }),
-            isSender: true,
-            senderName: "JOKER",
-        };
-
-        // Emit the message to the server
-        socket.emit('sendMessage', newMessage);
-        setMessage('');
+    const sendMessage = async (text: string) => {
+        if (typeof text !== 'string') return;
+        
+        await socketClient.emit('message', 'send', {
+            to: 'defaultGroup',
+            type: 'text',
+            content: text
+        });
     };
+    ;
+
     const fileInputRef = useRef(null);
 
     const handleFileChange = async (event) => {
@@ -100,7 +92,7 @@ const ChatScreen = () => {
                     isSender: true,
                     senderName: "JOKER",
                 };
-                socket.emit('sendMessage', fileMessage); // Emit the file message to the server
+                messageHandlers.sendMessage('Image', 'groupId'); // Emit the file message to the server
             })
             .catch(error => {
                 console.error('Error:', error);
@@ -110,21 +102,22 @@ const ChatScreen = () => {
 
     return (
         <View style={styles.container}>
-            <FlatList
-                data={messages}
-                renderItem={({ item }) => (
-                    <View style={{ flexDirection: item.isSender ? 'row-reverse' : 'row', alignItems: 'center', margin: 5 }}>
-                        {!item.isSender && <Image source={{ uri: 'avatar_url' }} style={{ width: 50, height: 50, borderRadius: 25, marginRight: 10 }} />}
-                        <View style={{ backgroundColor: item.isSender ? 'blue' : 'green', padding: 10, borderRadius: 10 }}>
-                            {!item.isSender && <Text style={{ color: 'white', fontWeight: 'bold' }}>{item.senderName}</Text>}
-                            <Text style={{ color: 'white' }}>{item.text}</Text>
-                        </View>
-                        {item.isSender && <Image source={{ uri: 'avatar_url' }} style={{ width: 50, height: 50, borderRadius: 25, marginLeft: 10 }} />}
-                    </View>
-                )}
-                keyExtractor={item => item.id}
-                contentContainerStyle={{ paddingBottom: 100 }}
-            />
+           <FlatList
+    data={messages}
+    renderItem={({ item, index }) => (
+        <ChatBubble 
+            message={item}
+            isConnectedToNext={
+                index < messages.length - 1 && 
+                messages[index + 1].isSender === item.isSender
+            }
+        />
+    )}
+    keyExtractor={item => item.id}
+    contentContainerStyle={{ paddingBottom: 100 }}
+/>
+
+
             <View style={styles.inputContainer}>
                 <TextInput
                     style={styles.input}
@@ -134,7 +127,7 @@ const ChatScreen = () => {
                     placeholderTextColor="#fff"
                 />
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                    <Button title="✉️" onPress={sendMessage} color="#fff" />
+                    <Button title="✉️" onPress={(e) => sendMessage(message)} color="#fff" />
                     {Platform.OS !== 'web' ? (
                       <Button title="🖼️" onPress={uploadImage} color="#fff" />
                     ) : (

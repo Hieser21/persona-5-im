@@ -1,17 +1,39 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, TextInput, Button, StyleSheet, Image } from 'react-native';
 import { ThemedText } from '@/components/ThemedText';
+import { socketClient } from '@/hooks/socketService';
 import { ParticleBackground } from '@/components/ParticleBackground';
-
+import { router } from 'expo-router';
+interface FormErrors {
+  username?: string;
+  password?: string;
+}
 const RegisterScreen = () => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-
-  const handleRegister = () => {
-    // Handle registration logic here
-    console.log('Registered:', { username, password });
+  useEffect(() => {
+    socketClient.connect();
+    return () => socketClient.disconnect();
+  }, []);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const validateForm = () => {
+    const newErrors: FormErrors = {};
+    if (!username) newErrors.username = 'Username is required';
+    if (!password) newErrors.password = 'Password is required';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
   };
 
+  const handleRegister = async () => {
+    if (!validateForm()) return;
+    const [error, response] = await socketClient.register(username, password);
+    
+    if (error) {
+      setErrors({ username: error });
+    } else {
+        router.replace('/(tabs)/chats');
+    }
+};
   return (
     <View style={styles.container}>
       <ParticleBackground />
