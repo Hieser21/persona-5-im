@@ -1,74 +1,252 @@
-import { Image, StyleSheet, Platform } from 'react-native';
+import { useState, useEffect } from 'react';
+import { Image, StyleSheet, Pressable } from 'react-native';
+import Animated, { 
+  useAnimatedStyle, 
+  withSpring,
+  withTiming,
+  withRepeat,
+  useSharedValue
+} from 'react-native-reanimated';
+import * as Haptics from 'expo-haptics';
 
-import { HelloWave } from '@/components/HelloWave';
-import ParallaxScrollView from '@/components/ParallaxScrollView';
 import { ThemedText } from '@/components/ThemedText';
 import { ThemedView } from '@/components/ThemedView';
+import { TextInput } from 'react-native';
+import { ParticleBackground } from '@/components/ParticleBackground';
 
-export default function HomeScreen() {
+interface FormErrors {
+  email?: string;
+  password?: string;
+}
+
+export default function LoginScreen() {
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const buttonScale = useSharedValue(1);
+  const loadingRotation = useSharedValue(0);
+
+  const validateForm = () => {
+    const newErrors: FormErrors = {};
+    if (!email) newErrors.email = 'Email is required';
+    if (!password) newErrors.password = 'Password is required';
+    setErrors(newErrors);
+    return Object.keys(newErrors).length === 0;
+  };
+
+  const handleLogin = async () => {
+    if (!validateForm()) return;
+    
+    setIsLoading(true);
+    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
+
+    // Simulate API call
+    try {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Handle successful login
+    } catch (error) {
+      setErrors({ email: 'Invalid credentials' });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const buttonAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { scale: buttonScale.value },
+      { skewX: '-10deg' }
+    ]
+  }));
+
+  const loadingAnimatedStyle = useAnimatedStyle(() => ({
+    transform: [{ rotate: `${loadingRotation.value}deg` }]
+  }));
+
+  useEffect(() => {
+    if (isLoading) {
+      loadingRotation.value = withRepeat(
+        withTiming(360, { duration: 1000 }),
+        -1
+      );
+    } else {
+      loadingRotation.value = 0;
+    }
+  }, [isLoading]);
+
   return (
-    <ParallaxScrollView
-      headerBackgroundColor={{ light: '#A1CEDC', dark: '#1D3D47' }}
-      headerImage={
+    <ThemedView style={styles.container}>
+      <ParticleBackground />
+
+      <Animated.View style={[styles.logoContainer]}>
         <Image
-          source={require('@/assets/images/partial-react-logo.png')}
-          style={styles.reactLogo}
+          source={require('@/assets/images/persona5-logo.png')}
+          style={styles.logo}
+          resizeMode="contain"
         />
-      }>
-      <ThemedView style={styles.titleContainer}>
-        <ThemedText type="title">Welcome!</ThemedText>
-        <HelloWave />
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 1: Try it</ThemedText>
-        <ThemedText>
-          Edit <ThemedText type="defaultSemiBold">app/(tabs)/index.tsx</ThemedText> to see changes.
-          Press{' '}
-          <ThemedText type="defaultSemiBold">
-            {Platform.select({
-              ios: 'cmd + d',
-              android: 'cmd + m',
-              web: 'F12'
-            })}
-          </ThemedText>{' '}
-          to open developer tools.
+        <ThemedText type="title" style={styles.title}>
+          PHANTOM CHAT
         </ThemedText>
-      </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 2: Explore</ThemedText>
-        <ThemedText>
-          Tap the Explore tab to learn more about what's included in this starter app.
+      </Animated.View>
+
+      <ThemedView variant="card" style={styles.formContainer}>
+        <ThemedText type="subtitle" style={styles.welcomeText}>
+          Welcome back, Phantom Thief
         </ThemedText>
+        
+        <TextInput
+          placeholder="Email"
+          value={email}
+          onChangeText={(text) => {
+            setEmail(text);
+            setErrors({ ...errors, email: undefined });
+          }}
+          style={[styles.input, errors.email && styles.inputError]}
+          placeholderTextColor="rgba(255, 255, 255, 0.5)"
+          autoCapitalize="none"
+          keyboardType="email-address"
+        />
+
+        <TextInput
+          placeholder="Password"
+          value={password}
+          onChangeText={(text) => {
+            setPassword(text);
+            setErrors({ ...errors, password: undefined });
+          }}
+          secureTextEntry
+          style={[styles.input, errors.password && styles.inputError]}
+          placeholderTextColor="rgba(255, 255, 255, 0.5)"
+        />
+
+        <ThemedView style={styles.buttonContainer}>
+          <Pressable 
+            onPressIn={() => {
+              buttonScale.value = withSpring(0.95);
+            }}
+            onPressOut={() => {
+              buttonScale.value = withSpring(1);
+            }}
+            onPress={handleLogin}
+            disabled={isLoading}
+          >
+            <Animated.View style={[styles.button, buttonAnimatedStyle]}>
+              {isLoading ? (
+                <Animated.View style={[styles.loadingIcon, loadingAnimatedStyle]}>
+                  {/* Your loading icon component */}
+                </Animated.View>
+              ) : (
+                <ThemedText style={styles.buttonText}>
+                  TAKE YOUR TIME
+                </ThemedText>
+              )}
+            </Animated.View>
+          </Pressable>
+          
+          <ThemedText type="link" style={styles.registerText}>
+            First time? Join the Phantom Thieves
+          </ThemedText>
+        </ThemedView>
       </ThemedView>
-      <ThemedView style={styles.stepContainer}>
-        <ThemedText type="subtitle">Step 3: Get a fresh start</ThemedText>
-        <ThemedText>
-          When you're ready, run{' '}
-          <ThemedText type="defaultSemiBold">npm run reset-project</ThemedText> to get a fresh{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> directory. This will move the current{' '}
-          <ThemedText type="defaultSemiBold">app</ThemedText> to{' '}
-          <ThemedText type="defaultSemiBold">app-example</ThemedText>.
-        </ThemedText>
-      </ThemedView>
-    </ParallaxScrollView>
+    </ThemedView>
   );
 }
 
 const styles = StyleSheet.create({
-  titleContainer: {
-    flexDirection: 'row',
+  container: {
+    flex: 1,
+    backgroundColor: '#0D0D0D',
+    padding: 20,
+    justifyContent: 'center',
+  },
+  logoContainer: {
     alignItems: 'center',
-    gap: 8,
+    marginBottom: 40,
   },
-  stepContainer: {
-    gap: 8,
+  logo: {
+    width: 120,
+    height: 120,
+    marginBottom: 16,
+  },
+  title: {
+    textAlign: 'center',
+    color: '#FFFFFF',
+    fontSize: 32,
     marginBottom: 8,
+    letterSpacing: 4,
   },
-  reactLogo: {
-    height: 178,
-    width: 290,
-    bottom: 0,
-    left: 0,
-    position: 'absolute',
+  formContainer: {
+    padding: 32,
+    gap: 24,
+    backgroundColor: 'rgba(20, 20, 20, 0.95)',
+    borderRadius: 8,
+    maxWidth: 400,
+    alignSelf: 'center',
+    width: '100%',
+  },
+  welcomeText: {
+    textAlign: 'center',
+    color: '#FFFFFF',
+    marginBottom: 8,
+    opacity: 0.9,
+  },
+  input: {
+    height: 50,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+    borderWidth: 1,
+    borderColor: '#FF0000',
+    color: '#FFFFFF',
+    paddingHorizontal: 15,
+    fontSize: 16,
+    transform: [{ skewX: '-5deg' }],
+    borderRadius: 4,
+  },
+  buttonContainer: {
+    gap: 20,
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  button: {
+    backgroundColor: '#FF0000',
+    paddingVertical: 14,
+    paddingHorizontal: 48,
+    transform: [{ skewX: '-10deg' }],
+    shadowColor: '#FF0000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    borderRadius: 4,
+    width: '100%',
+  },
+  buttonText: {
+    color: '#FFFFFF',
+    fontSize: 18,
+    fontWeight: 'bold',
+    textAlign: 'center',
+    letterSpacing: 2,
+  },
+  registerText: {
+    color: '#FF0000',
+    textAlign: 'center',
+    opacity: 0.9,
+    fontSize: 14,
+  },
+  inputError: {
+    borderColor: '#FF0000',
+    borderWidth: 2,
+  },
+  loadingIcon: {
+    width: 24,
+    height: 24,
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
+    borderRadius: 12,
+    borderTopColor: 'transparent',
+  },
+  errorText: {
+    color: '#FF0000',
+    fontSize: 12,
+    marginTop: 4,
+    transform: [{ skewX: '-5deg' }],
   },
 });
